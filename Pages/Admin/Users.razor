@@ -1,0 +1,275 @@
+@page "/admin/users"
+@using Microsoft.AspNetCore.Authorization;
+@using Microsoft.AspNetCore.Identity;
+@using ParentCapitalBlazor.Data;
+@inject UserManager<ApplicationUser> _UserManager
+@inject RoleManager<IdentityRole> _RoleManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h3>Администрирование пользователей</h3>
+<AuthorizeView>
+    <Authorized>
+        @if (@context.User.IsInRole(ADMINISTRATION_ROLE))
+        {
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th><button type="button" class="btn btn-primary" @onclick="AddNewUser"><span class="oi oi-plus" aria-hidden="true"></span></button></th>
+                        <th scope="col">Код</th>
+                        <th scope="col">Имя пользователя</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Email подтвержден</th>
+                        <th scope="col">Роль</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in ListUsers)
+                    {
+                        <tr>
+                            <th>
+
+                                <a class="btn btn-info" href="/admin/users/@item.Id" title="Открыть подробнее"><span class="oi oi-external-link"></span></a>
+                                <button type="button" class="btn btn-warning" @onclick="(() => EditUser(item))"><span class="oi oi-pencil" aria-hidden="true"></span></button>
+                                <button type="button" class="btn btn-danger" @onclick="(() => DeleteUser(item))"><span class="oi oi-trash" aria-hidden="true"></span></button>
+                            </th>
+                            <td scope="row">@item.Id</td>
+                            <td>@item.UserName</td>
+                            <td>@item.Email</td>
+                            <td>@item.EmailConfirmed</td>
+                        </tr>
+                    } 
+                </tbody>
+            </table>
+
+            <Modal @ref="modalNew">
+                <Title>Cоздать пользователя</Title>
+                <Body>
+                    <form>
+                        <div class="form-group">
+                            <label for="obj-user-name" class="col-form-label">Имя пользователя</label>
+                            <input type="text" class="form-control" id="obj-user-name" @bind="objUser.UserName">
+                        </div>
+                        <div class="form-group">
+                            <label for="obj-user-email" class="col-form-label">Электронная почта</label>
+                            <input type="text" class="form-control" id="obj-user-email" @bind="objUser.Email">
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="obj-user-email-confirmed" @bind="objUser.EmailConfirmed">
+                            <label for="obj-user-email-confirmed" class="col-form-label">Email подтвержден</label>
+                        </div>
+                        <div class="form-group">
+                            <label for="obj-user-pass" class="col-form-label">Пароль</label>
+                            <input type="password" class="form-control" id="obj-user-pass" @bind="objUser.PasswordHash">
+                        </div>
+                    </form>
+                </Body>
+                <Footer>
+                    <button type="button" class="btn btn-primary" @onclick="SaveNewUser">Сохранить</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modalNew" @onclick="() => modalNew.Close()">Закрыть</button>
+                </Footer>
+            </Modal>
+
+            <Modal @ref="modalEdit">
+                <Title>Редактировать пользователя</Title>
+                <Body>
+                    <form>
+                        <div class="form-group">
+                            <label for="obj-role-id" class="col-form-label">Код пользователя:</label>
+                            <input type="text" class="form-control" id="obj-role-id" @bind="objUser.Id" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="obj-user-name" class="col-form-label">Имя пользователя</label>
+                            <input type="text" class="form-control" id="obj-user-name" @bind="objUser.UserName">
+                        </div>
+                        <div class="form-group">
+                            <label for="obj-user-email" class="col-form-label">Электронная почта</label>
+                            <input type="text" class="form-control" id="obj-user-email" @bind="objUser.Email">
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="obj-user-email-confirmed" @bind="objUser.EmailConfirmed">
+                            <label for="obj-user-email-confirmed" class="col-form-label">Email подтвержден</label>
+                        </div>
+                        <div class="form-group">
+                            <label for="obj-user-pass" class="col-form-label">Пароль</label>
+                            <input type="password" class="form-control" id="obj-user-pass" @bind="objUser.PasswordHash">
+                        </div>
+                    </form>
+                </Body>
+                <Footer>
+                    <button type="button" class="btn btn-primary" @onclick="SaveEditUser">Сохранить</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modalEdit" @onclick="() => modalEdit.Close()">Закрыть</button>
+                </Footer>
+            </Modal>
+        }
+        else
+        {
+            <p>Вы не входите в группу @ADMINISTRATION_ROLE.</p>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p>Войдите в систему</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+
+    private Modal modalNew { get; set; }
+    private Modal modalEdit { get; set; }
+
+    string ADMINISTRATION_ROLE = "Администраторы";
+
+    ApplicationUser objUser = new ApplicationUser();
+
+    List<ApplicationUser> ListUsers = new List<ApplicationUser>();
+    List<IdentityRole> RoleOptionsList = new List<IdentityRole>();
+
+    // Для удержания любых возможных ошибок
+    string strError = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Проверка наличия в базе данных роли администратора
+        var RoleResult = await _RoleManager.FindByNameAsync(ADMINISTRATION_ROLE);
+        if (RoleResult == null)
+        {
+            await _RoleManager.CreateAsync(new IdentityRole(ADMINISTRATION_ROLE));
+        }
+
+        // Проверка наличия в базе данных пользователя agolgov с правами администратора
+        var user = await _UserManager.FindByNameAsync("agolgov");
+
+        if (user != null)
+        {
+            if (user.EmailConfirmed == false)
+            {
+                // делаем учетку agolgov подтвержденной
+                user.EmailConfirmed = true;
+                await _UserManager.UpdateAsync(user);
+            }
+            var UserResult = await _UserManager.IsInRoleAsync(user, ADMINISTRATION_ROLE);
+            if (!UserResult)
+            {
+                // делаем пользователя agolgov Администратором
+                await _UserManager.AddToRoleAsync(user, ADMINISTRATION_ROLE);
+                await _UserManager.UpdateAsync(user);
+            }
+        }
+
+        RoleOptionsList = _RoleManager.Roles.ToList();
+        GetUsers();
+    }
+
+    private void GetUsers()
+    {
+        strError = "";
+
+        ListUsers = new List<ApplicationUser>();
+        var users = _UserManager.Users.Select(u => new ApplicationUser
+        {
+            Id = u.Id,
+            UserName = u.UserName,
+            Email = u.Email,
+            PasswordHash = "*****",
+            EmailConfirmed = u.EmailConfirmed,
+        });
+
+        // Получаем UserRole для пользователей
+        foreach (ApplicationUser itemUser in users)
+        {
+            ListUsers.Add(itemUser);
+        }
+    }
+
+    void AddNewUser()
+    {
+        objUser = new ApplicationUser();
+        objUser.PasswordHash = "*****";
+        objUser.Id = "";
+
+        modalNew.Open();
+    }
+
+    async Task EditUser(ApplicationUser _SelectedUser)
+    {
+        objUser = _SelectedUser;
+        var user = await _UserManager.FindByIdAsync(objUser.Id);
+
+        modalEdit.Open();
+    }
+
+    async Task SaveNewUser()
+    {
+        var NewUser = new ApplicationUser
+        {
+            UserName = objUser.UserName,
+            Email = objUser.Email,
+            EmailConfirmed = objUser.EmailConfirmed,
+        };
+
+        var CreateResult = await _UserManager.CreateAsync(NewUser, objUser.PasswordHash);
+
+        if (!CreateResult.Succeeded)
+        {
+            if (CreateResult.Errors.FirstOrDefault() != null)
+            {
+                strError = CreateResult.Errors.FirstOrDefault().Description;
+            }
+            else
+            {
+                strError = "Create error";
+            }
+            return;
+        }
+
+        modalNew.Close();
+        GetUsers();
+    }
+
+    async Task SaveEditUser()
+    {
+        var user = await _UserManager.FindByIdAsync(objUser.Id);
+
+        user.Email = objUser.Email;
+        user.EmailConfirmed = objUser.EmailConfirmed;
+        
+         await _UserManager.UpdateAsync(user);
+
+        // Обновляем пароль только, если текущее значение не является значением по умолчанию
+        if (objUser.PasswordHash != "*****")
+        {
+            var resetToken = await _UserManager.GeneratePasswordResetTokenAsync(user);
+            var passwordUser = await _UserManager.ResetPasswordAsync(user, resetToken, objUser.PasswordHash);
+
+            if (!passwordUser.Succeeded)
+            {
+                if (passwordUser.Errors.FirstOrDefault() != null)
+                {
+                    strError = passwordUser.Errors.FirstOrDefault().Description;
+                }
+                else
+                {
+                    strError = "Pasword error";
+                }
+                return;
+            }
+        }
+
+        modalEdit.Close();
+        GetUsers();
+    }
+
+    async Task DeleteUser(ApplicationUser _IdentityUser)
+    {
+        objUser = _IdentityUser;
+        var user = await _UserManager.FindByIdAsync(objUser.Id);
+        if (user != null)
+        {
+            await _UserManager.RemoveFromRolesAsync(user, await _UserManager.GetRolesAsync(user));
+            await _UserManager.DeleteAsync(user);
+        }
+
+        GetUsers();
+    }
+}

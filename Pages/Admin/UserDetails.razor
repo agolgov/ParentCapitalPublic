@@ -1,0 +1,178 @@
+@page "/admin/users/{userId}"
+@using Microsoft.AspNetCore.Authorization;
+@using Microsoft.AspNetCore.Identity;
+@using ParentCapitalBlazor.Data;
+@inject UserManager<ApplicationUser> _UserManager
+@inject RoleManager<IdentityRole> _RoleManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<AuthorizeView>
+    <Authorized>
+        @if (@context.User.IsInRole(ADMINISTRATION_ROLE))
+        {
+            <h3>Информация о пользователе</h3>
+
+            <section class="content-container">
+                <h1>
+                    <a class="btn btn-outline-secondary" href="/admin/users" title="К списку пользователей"><span class="oi oi-arrow-left"></span></a>
+                    @objUser.UserName
+                </h1>
+
+                <br>
+                <h3>Основные сведения</h3>
+                <dl class="row">
+                    <dt class="col-sm-3">Код</dt>
+                    <dd class="col-sm-9">@objUser.Id</dd>
+
+                    <dt class="col-sm-3">Имя пользователя</dt>
+                    <dd class="col-sm-9">@objUser.UserName</dd>
+
+                    <dt class="col-sm-3">Email</dt>
+                    <dd class="col-sm-9">@objUser.Email</dd>
+
+                    <dt class="col-sm-3">Email подтвержден</dt>
+                    <dd class="col-sm-9">@objUser.EmailConfirmed</dd>
+                </dl>
+
+                <h3>Роли пользователя</h3>
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th><button type="button" class="btn btn-primary" @onclick="ShowAddRoleDialog" title="Добавить роль">
+                                    <span class="oi oi-file" aria-hidden="true"></span>
+                                </button>
+                            </th>
+                            <th scope="col">Код</th>
+                            <th scope="col">Роль</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in objUserRoles)
+                        {
+                            <tr>
+                                <th>
+                                    <button type="button" class="btn btn-danger" @onclick="(() => DeleteRole(item))">
+                                        <span class="oi oi-trash" aria-hidden="true"></span></button>
+                                </th>
+                                <td scope="row">@item.Id</td>
+                                <td>@item.Name</td>
+                            </tr>
+                        } 
+                    </tbody>
+                </table>
+            </section>
+
+            <Modal @ref="modalAddRole">
+                <Title>Добавить роль</Title>
+                <Body>
+                    <form>
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th scope="col">Код</th>
+                                    <th scope="col">Роль</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in allRoles)
+                                {
+                                    <tr>
+                                        <th>
+                                            <button type="button" class="btn btn-primary" @onclick="(() => AddRole(item))">
+                                                <span class="oi oi-file" aria-hidden="true"></span></button>
+                                        </th>
+                                        <td scope="row">@item.Id</td>
+                                        <td>@item.Name</td>
+                                    </tr>
+                                } 
+                            </tbody>
+                        </table>
+                    </form>
+                </Body>
+                <Footer>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modalAddRole" @onclick="() => modalAddRole.Close()">Закрыть</button>
+                </Footer>
+            </Modal>
+        }
+        else
+        {
+            <p>Вы не входите в группу @ADMINISTRATION_ROLE.</p>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p>Войдите в систему</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+
+    [Parameter]
+    public string userId { get; set; }
+
+    private Modal modalAddRole { get; set; }
+
+    string ADMINISTRATION_ROLE = "Администраторы";
+
+    ApplicationUser objUser = new ApplicationUser();
+    List<IdentityRole> objUserRoles = new  List<IdentityRole>();
+
+    IList<string> stringUserRoles = new List<string>();
+
+    List<IdentityRole> allRoles = new List<IdentityRole>();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        objUser = await _UserManager.FindByIdAsync(userId);
+        
+        stringUserRoles = await _UserManager.GetRolesAsync(objUser);
+
+        allRoles = _RoleManager.Roles.ToList();
+
+        foreach (var item in stringUserRoles)
+        {
+            objUserRoles.Add(await _RoleManager.FindByNameAsync(item.ToString()));
+        }
+    }
+
+    public void ShowAddRoleDialog()
+    {
+        // открыть форму добавления ролей со списком всех ролей
+        modalAddRole.Open();
+    }
+
+    async Task DeleteRole(IdentityRole _role)
+    {
+        // удаление роли у пользователя
+        List<string> removedRoles = new List<string>();
+        removedRoles.Add(_role.Name);
+        await _UserManager.RemoveFromRolesAsync(objUser, removedRoles);
+
+        stringUserRoles = await _UserManager.GetRolesAsync(objUser);
+        allRoles = _RoleManager.Roles.ToList();
+        objUserRoles.Clear();
+        foreach (var item in stringUserRoles)
+        {
+            objUserRoles.Add(await _RoleManager.FindByNameAsync(item.ToString()));
+        }
+    }
+
+    async Task AddRole(IdentityRole _role)
+    {
+        // добавление роли пользователю
+        await _UserManager.AddToRoleAsync(objUser, _role.Name);
+
+        stringUserRoles = await _UserManager.GetRolesAsync(objUser);
+        allRoles = _RoleManager.Roles.ToList();
+        objUserRoles.Clear();
+        foreach (var item in stringUserRoles)
+        {
+            objUserRoles.Add(await _RoleManager.FindByNameAsync(item.ToString()));
+        }
+
+        modalAddRole.Close();
+    }
+}

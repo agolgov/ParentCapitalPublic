@@ -1,0 +1,187 @@
+@page "/admin/genders"
+@attribute [Authorize(Roles = "Администраторы")]
+@using ParentCapitalBlazor.Data
+@inject IGenderService genderService
+@inject ICertificateService certificateService
+@inject IChildService childService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h1>Пол</h1>
+<section class="content-container">
+    <p>Справочик человеческих полов</p>
+
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th><button type="button" class="btn btn-primary" @onclick="ShowNewDialog"><span class="oi oi-plus" aria-hidden="true"></span></button></th>
+                <th scope="col">Код</th>
+                <th scope="col">Пол</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in _genderList)
+            {
+                <tr>
+                    <th>
+                        <button type="button" class="btn btn-warning" @onclick="(() => ShowEditDialog(item))"><span class="oi oi-pencil" aria-hidden="true"></span></button>
+                        <button type="button" class="btn btn-danger" @onclick="(() => ShowDeleteDialog(item))"><span class="oi oi-trash" aria-hidden="true"></span></button>
+                    </th>
+                    <td scope="row">@item.Id</td>
+                    <td>@item.Name</td>
+                </tr>
+            } 
+        </tbody>
+    </table>
+
+    <Modal @ref="modalNew">
+        <Title>Cоздать</Title>
+        <Body>
+            <form>
+                <div class="form-group">
+                    <label for="obj-name" class="col-form-label">Пол</label>
+                    <input type="text" class="form-control" id="obj-name" @bind="objGender.Name">
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveNew">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalNew" @onclick="() => modalNew.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalEdit">
+        <Title>Редактировать</Title>
+        <Body>
+            <form>
+                <div class="form-group">
+                    <label for="obj-id" class="col-form-label">Код</label>
+                    <input type="text" class="form-control" id="obj-id" @bind="objGender.Id" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="obj-name" class="col-form-label">Пол</label>
+                    <input type="text" class="form-control" id="obj-name" @bind="objGender.Name">
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveEdit">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalEdit" @onclick="CancelEdit">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalDelete">
+        <Title>Удалить?</Title>
+        <Body>
+            <form>
+                @if(@textErrorModalDelete != "")
+                {
+                    <div class="alert alert-danger" role="alert">@textErrorModalDelete</div>
+                }
+                <div class="form-group">
+                    <label for="obj-id" class="col-form-label">Код</label>
+                    <input type="text" class="form-control" id="obj-id" @bind="objGender.Id" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="obj-name" class="col-form-label">Пол</label>
+                    <input type="text" class="form-control" id="obj-name" @bind="objGender.Name" readonly>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-danger" @onclick="Delete">Удалить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalDelete" @onclick="() => modalDelete.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+</section>
+
+@code{
+    private List<Gender> _genderList = new List<Gender>();
+    Gender objGender = new Gender();
+
+    private Modal modalNew { get; set; }
+    private Modal modalEdit { get; set; }
+    private Modal modalDelete { get; set; }
+
+    public string textErrorModalDelete = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _genderList = await genderService.GetAllAsync();
+
+        await base.OnInitializedAsync();
+    }
+
+    void ShowNewDialog()
+    {
+        objGender = new Gender();
+        modalNew.Open();
+    }
+
+    async Task SaveNew()
+    {
+        await genderService.CreateAsync(objGender);
+        _genderList = await genderService.GetAllAsync();
+        modalNew.Close();
+    }
+
+    void ShowEditDialog(Gender gender)
+    {
+        objGender = gender;
+        modalEdit.Open();
+    }
+
+    async Task SaveEdit()
+    {
+        await genderService.UpdateAsync(objGender);
+        _genderList = await genderService.GetAllAsync();
+        modalEdit.Close();
+    }
+
+    async Task CancelEdit()
+    {
+        _genderList = await genderService.GetAllAsync();
+        modalEdit.Close();
+    }
+
+    void ShowDeleteDialog(Gender gender)
+    {
+        textErrorModalDelete = "";
+        objGender = gender;
+        modalDelete.Open();
+    }
+
+    async Task Delete()
+    {
+        if (await ValidModalDelete() == true)
+        {
+            await genderService.DeleteAsync(objGender.Id);
+            _genderList = await genderService.GetAllAsync();
+            modalDelete.Close();
+        }
+    }
+
+    public async Task<bool> ValidModalDelete()
+    {
+        textErrorModalDelete = "";
+
+        // Проверяем наличие в базе сертификатов или детей с таким полом
+        var certList = await certificateService.GetAllAsync();
+        var chldList = await childService.GetAllAsync();
+
+        var certGengerCount = certList.Where(c => c.GenderId == objGender.Id).Count();
+        var chldGengerCount = chldList.Where(c => c.GenderId == objGender.Id).Count();
+
+        if (certGengerCount != 0 || chldGengerCount != 0)
+        {
+            textErrorModalDelete = "Удалить данный пол невозможно! Он используется в сертификатах или сведениях о детях!";
+        }
+        if (textErrorModalDelete == "")
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+}

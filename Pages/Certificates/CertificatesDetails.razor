@@ -1,0 +1,945 @@
+﻿@page "/certificates/{certificateId:int}"
+@attribute [Authorize(Roles = "Администраторы, Департамент, ОСЗН")]
+@using ParentCapitalBlazor.Data
+@inject IGenderService genderService
+@inject IDestinationService destinationService
+@inject ICertificateService certificateService
+@inject IChildService childService
+@inject IOrderService orderService
+@inject IIndexationService indexationService
+
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<section class="content-container">
+    <h1>
+        <a class="btn btn-outline-secondary" href="/certificates" title="К списку сертификатов"><span class="oi oi-arrow-left"></span></a>
+        @objCertificate.Parent
+    </h1>
+
+    <br>
+    <h3>
+        <button type="button" class="btn btn-warning" @onclick="(() => modalEdit.Open())" title="Редактировать">
+            <span class="oi oi-pencil" aria-hidden="true"></span></button>
+        <button type="button" class="btn btn-danger" @onclick="(() => modalDelete.Open())" title="Удалить">
+            <span class="oi oi-trash" aria-hidden="true"></span></button>
+        Основные сведения
+    </h3>
+    
+    <div class="row">
+        <div class="col-7">
+            <dl class="row">
+                <dt class="col-3">Номер</dt>
+                <dd class="col-9">@objCertificate.Number</dd>
+
+                <dt class="col-3">Дата</dt>
+                <dd class="col-9">@objCertificate.Date.ToShortDateString()</dd>
+
+                <dt class="col-3">ФИО</dt>
+                <dd class="col-9">@objCertificate.Parent</dd>
+
+                <dt class="col-3">Пол</dt>
+                <dd class="col-9">@genderName</dd>
+
+                <dt class="col-3">Дата рождения</dt>
+                <dd class="col-9">@objCertificate.DateOfBirth.ToShortDateString()</dd>
+                
+                <dt class="col-3">Адрес</dt>
+                <dd class="col-9">@objCertificate.Address</dd>
+                
+                <dt class="col-3">Документ</dt>
+                <dd class="col-9">@objCertificate.Document</dd>
+                
+                <dt class="col-3">Примечание</dt>
+                <dd class="col-9" style="white-space: pre-line">@objCertificate.Description</dd>
+            </dl>
+        </div>
+        <div class="col-5">
+            <dl class="row">
+                <dt class="col-8 text-right">Размер капитала</dt>
+                <dd class="col-4 text-right">@objCertificate.Sum.ToString("N2")</dd>
+
+                <dt class="col-8 text-right">Общая сумма индексации</dt>
+                <dd class="col-4 text-right">@SumInd.ToString("N2")</dd>
+
+                <dt class="col-8 text-right">Размер капитала с учeтом индексации</dt>
+                <dd class="col-4 text-right">@SumWithInd.ToString("N2")</dd>
+
+                <dt class="col-8 text-right">Общая сумма по распоряжениям</dt>
+                <dd class="col-4 text-right">@SumOrders.ToString("N2")</dd>
+                
+                <dt class="col-8 text-right">Остаток капитала</dt>
+                <dd class="col-4 text-right">@SumBalance.ToString("N2")</dd>
+            </dl>
+        </div>
+    </div>
+    <h3>Дети</h3>
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th><button type="button" class="btn btn-primary" @onclick="ShowNewChildDialog" title="Добавить ребенка">
+                        <span class="oi oi-file" aria-hidden="true"></span>
+                    </button>
+                </th>
+                <th scope="col">ФИО</th>
+                <th scope="col">Пол</th>
+                <th scope="col">Дата рождения</th>
+                <th scope="col">Место рождения</th>
+                <th scope="col">Документ</th>
+                <th scope="col">Гражданство</th>
+                <th scope="col">Адрес</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in _childList)
+            {
+                <tr>
+                    <th>
+                        <button type="button" class="btn btn-warning" @onclick="(() => EditChild(item))">
+                            <span class="oi oi-pencil" aria-hidden="true"></span></button>
+                        <button type="button" class="btn btn-danger" @onclick="(() => DeleteChild(item))">
+                            <span class="oi oi-trash" aria-hidden="true"></span></button>
+                    </th>
+                    <td>@item.Name</td>
+                    <td>@item.Gender.Name</td>
+                    <td>@item.DateOfBirth.ToShortDateString()</td>
+                    <td>@item.PlaceOfBirth</td>
+                    <td>@item.Document</td>
+                    <td>@item.Citizenship</td>
+                    <td style="white-space: pre-line">@item.Address</td>
+                </tr>
+            } 
+        </tbody>
+    </table>
+
+    <h3>Распоряжения</h3>
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th><button type="button" class="btn btn-primary" @onclick="ShowNewOrderDialog" title="Добавить распоряжение">
+                    <span class="oi oi-file" aria-hidden="true"></span>
+                </button></th>
+                <th scope="col">Номер</th>
+                <th scope="col">Дата</th>
+                <th scope="col" class="text-right">Сумма</th>                
+                <th scope="col">Дата оплаты</th>
+                <th scope="col">Назначение</th>
+                <th scope="col">Примечание</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in _orderList)
+            {
+                <tr>
+                    <th>
+                        <button type="button" class="btn btn-warning" @onclick="(() => EditOrder(item))">
+                            <span class="oi oi-pencil" aria-hidden="true"></span></button>
+                        <button type="button" class="btn btn-danger" @onclick="(() => DeleteOrder(item))">
+                            <span class="oi oi-trash" aria-hidden="true"></span></button>
+                    </th>
+                    <td>@item.Number</td>
+                    <td>@item.Date.ToShortDateString()</td>
+                    <td class="text-right">@item.Sum.ToString("N2")</td>
+                    <td>@item.DatePay.ToShortDateString()</td>
+                    <td>@item.Destination.Name</td>
+                    <td style="white-space: pre-line">@item.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <h3>Индексация</h3>
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th><button type="button" class="btn btn-primary" @onclick="ShowNewIndexationDialog" title="Добавить индексацию">
+                    <span class="oi oi-file" aria-hidden="true"></span>
+                </button></th>
+                <th scope="col">Номер</th>
+                <th scope="col">Дата</th>
+                <th scope="col" class="text-right">Сумма</th>
+                <th scope="col">Примечание</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in _indexationList)
+            {
+                <tr>
+                    <th>
+                        <button type="button" class="btn btn-warning" @onclick="(() => EditIndexation(item))">
+                            <span class="oi oi-pencil" aria-hidden="true"></span></button>
+                        <button type="button" class="btn btn-danger" @onclick="(() => DeleteIndexation(item))">
+                            <span class="oi oi-trash" aria-hidden="true"></span></button>
+                    </th>
+                    <td>@item.Number</td>
+                    <td>@item.Date.ToShortDateString()</td>
+                    <td class="text-right">@item.Sum.ToString("N2")</td>
+                    <td style="white-space: pre-line">@item.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <Modal @ref="modalEdit">
+        <Title>Редактировать основные сведения</Title>
+        <Body>
+            <form>
+                @if(@textErrorModalEdit != "")
+                {
+                    <div class="alert alert-danger" role="alert">@textErrorModalEdit</div>
+                }
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-cer-numder" class="col-form-label">Номер</label>
+                        <input type="text" class="form-control" id="obj-cer-numder" @bind="objCertificate.Number">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-cer-date" class="col-form-label">Дата</label>
+                        <input type="date" class="form-control" id="obj-cer-date" @bind="objCertificate.Date">
+                    </div>
+                </div
+                <div class="form-group">
+                    <label for="obj-cer-sum" class="col-form-label">Размер капитала</label>
+                    <input type="number" class="form-control" id="obj-cer-sum" @bind="objCertificate.Sum">
+                </div>
+                <div class="form-group">
+                    <label for="obj-cer-parent" class="col-form-label">ФИО</label>
+                    <input type="text" class="form-control" id="obj-cer-parent" @bind="objCertificate.Parent">
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-cer-gender" class="col-form-label">Пол</label>
+                        <select class="form-control" id="obj-cer-gender" @bind="objCertificate.GenderId">
+                            @foreach (var item in _genderList)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-cer-dob" class="col-form-label">Дата рождения</label>
+                        <input type="date" class="form-control" id="obj-cer-dob" @bind="objCertificate.DateOfBirth">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="obj-cer-address" class="col-form-label">Адрес</label>
+                    <input type="text" class="form-control" id="obj-cer-address" @bind="objCertificate.Address">
+                </div>
+                <div class="form-group">
+                    <label for="obj-cer-document" class="col-form-label">Документ</label>
+                    <input type="text" class="form-control" id="obj-cer-document" @bind="objCertificate.Document">
+                </div>
+                <div class="form-group">
+                    <label for="obj-cer-desc" class="col-form-label">Примечание</label>
+                    <textarea type="text" class="form-control" id="obj-cer-desc" @bind="objCertificate.Description"></textarea>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveEdit">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalEdit" @onclick="CancelEdit">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalDelete">
+        <Title>Удалить?</Title>
+        <Body>
+            <form>
+                <div class="alert alert-danger" role="alert">Внимание! Все связанные с сертификатом данные будут удалены!</div>
+                <div class="form-group">
+                    <label for="obj-cer-number" class="col-form-label">Номер</label>
+                    <input type="text" class="form-control" id="obj-cer-number" @bind="objCertificate.Number" readonly>
+                </div>
+                
+                <div class="form-group">
+                    <label for="obj-cer-date" class="col-form-label">Дата</label>
+                    <input type="date" class="form-control" id="obj-cer-date" @bind="objCertificate.Date" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label for="obj-cer-parent" class="col-form-label">ФИО</label>
+                    <input type="text" class="form-control" id="obj-cer-parent" @bind="objCertificate.Parent" readonly>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-danger" @onclick="Delete">Удалить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalDelete" @onclick="() => modalDelete.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalNewChild">
+        <Title>Добавить ребенка</Title>
+        <Body>
+            <form>
+                @if(@textErrorModalNewChild != "")
+                {
+                    <div class="alert alert-danger" role="alert">@textErrorModalNewChild</div>
+                }
+                <div class="form-group">
+                    <label for="obj-child-fio" class="col-form-label">ФИО</label>
+                    <input type="text" class="form-control" id="obj-child-fio" @bind="objChild.Name">
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-child-gender" class="col-form-label">Пол</label>
+                        <select class="form-control" id="obj-child-gender" @bind="objChild.GenderId">
+                            <option value="" selected disabled hidden>---</option>
+                            @foreach (var item in _genderList)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-child-dob" class="col-form-label">Дата рождения</label>
+                        <input type="date" class="form-control" id="obj-child-dob" @bind="objChild.DateOfBirth">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="obj-child-pob" class="col-form-label">Место рождения</label>
+                    <input type="text" class="form-control" id="obj-child-pob" @bind="objChild.PlaceOfBirth">
+                </div>
+                <div class="form-group">
+                    <label for="obj-child-document" class="col-form-label">Документ</label>
+                    <input type="text" class="form-control" id="obj-child-document" @bind="objChild.Document">
+                </div>
+                <div class="form-group">
+                    <label for="obj-child-citizenship" class="col-form-label">Гражданство</label>
+                    <input type="text" class="form-control" id="obj-child-citizenship" @bind="objChild.Citizenship">
+                </div>
+                <div class="form-group">
+                    <label for="obj-child-address" class="col-form-label">Адрес</label>
+                    <textarea type="text" class="form-control" id="obj-child-address" @bind="objChild.Address"></textarea>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveNewChild">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalNewChild" @onclick="() => modalNewChild.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalEditChild">
+        <Title>Редактировать сведения о ребенке</Title>
+        <Body>
+            <form>
+                <div class="form-group">
+                    <label for="obj-child-fio" class="col-form-label">ФИО</label>
+                    <input type="text" class="form-control" id="obj-child-fio" @bind="objChild.Name">
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-child-gender" class="col-form-label">Пол</label>
+                        <select class="form-control" id="obj-child-gender" @bind="objChild.GenderId">
+                            @foreach (var item in _genderList)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-child-dob" class="col-form-label">Дата рождения</label>
+                        <input type="date" class="form-control" id="obj-child-dob" @bind="objChild.DateOfBirth">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="obj-child-pob" class="col-form-label">Место рождения</label>
+                    <input type="text" class="form-control" id="obj-child-pob" @bind="objChild.PlaceOfBirth">
+                </div>
+                <div class="form-group">
+                    <label for="obj-child-document" class="col-form-label">Документ</label>
+                    <input type="text" class="form-control" id="obj-child-document" @bind="objChild.Document">
+                </div>
+                <div class="form-group">
+                    <label for="obj-child-citizenship" class="col-form-label">Гражданство</label>
+                    <input type="text" class="form-control" id="obj-child-citizenship" @bind="objChild.Citizenship">
+                </div>
+                <div class="form-group">
+                    <label for="obj-child-address" class="col-form-label">Адрес</label>
+                    <textarea type="text" class="form-control" id="obj-child-address" @bind="objChild.Address"></textarea>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveEditChild">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalEditChild" @onclick="CancelEditChild">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalDeleteChild">
+        <Title>Удалить информацию о ребенке?</Title>
+        <Body>
+            <form>
+                <div class="alert alert-danger" role="alert">Внимание! Отменить удаление невозможно!</div>
+                <div class="form-group">
+                    <label for="obj-child-fio" class="col-form-label">ФИО</label>
+                    <input type="text" class="form-control" id="obj-child-fio" @bind="objChild.Name" readonly>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-danger" @onclick="SaveDeleteChild">Удалить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalDeleteChild" @onclick="() => modalDeleteChild.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalNewOrder">
+        <Title>Добавить распоряжение</Title>
+        <Body>
+            <form>
+                @if(@textErrorModalNewOrder != "")
+                {
+                    <div class="alert alert-danger" role="alert">@textErrorModalNewOrder</div>
+                }
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-order-number" class="col-form-label">Номер</label>
+                        <input type="text" class="form-control" id="obj-order-number" @bind="objOrder.Number">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-order-date" class="col-form-label">Дата</label>
+                        <input type="date" class="form-control" id="obj-order-date" @bind="objOrder.Date">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-order-sum" class="col-form-label">Сумма</label>
+                        <input type="number" class="form-control" id="obj-order-sum" @bind="objOrder.Sum">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-order-datepay" class="col-form-label"><abbr title="Планируемая дата оплаты">Дата оплаты</abbr></label>
+                        <input type="date" class="form-control" id="obj-order-datepay" @bind="objOrder.DatePay">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="obj-order-destination" class="col-form-label">Назначение</label>
+                    <select class="form-control" id="obj-order-destination" @bind="objOrder.DestinationId">
+                        <option value="" selected disabled hidden>---</option>
+                        @foreach (var item in _destinationList)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="obj-order-description" class="col-form-label">Примечание</label>
+                    <textarea type="text" class="form-control" id="obj-order-description" @bind="objOrder.Description"></textarea>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveNewOrder">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalNewOrder" @onclick="() => modalNewOrder.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalEditOrder">
+        <Title>Редактировать распоряжение</Title>
+        <Body>
+            <form>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-order-number" class="col-form-label">Номер</label>
+                        <input type="text" class="form-control" id="obj-order-number" @bind="objOrder.Number">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-order-date" class="col-form-label">Дата</label>
+                        <input type="date" class="form-control" id="obj-order-date" @bind="objOrder.Date">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-order-sum" class="col-form-label">Сумма</label>
+                        <input type="number" class="form-control" id="obj-order-sum" @bind="objOrder.Sum">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-order-datepay" class="col-form-label"><abbr title="Планируемая дата оплаты">Дата оплаты</abbr></label>
+                        <input type="date" class="form-control" id="obj-order-datepay" @bind="objOrder.DatePay">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="obj-order-destination" class="col-form-label">Назначение</label>
+                    <select class="form-control" id="obj-order-destination" @bind="objOrder.DestinationId">
+                        @foreach (var item in _destinationList)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="obj-order-description" class="col-form-label">Примечание</label>
+                    <textarea type="text" class="form-control" id="obj-order-description" @bind="objOrder.Description"></textarea>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveEditOrder">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalEditOrder" @onclick="CancelEditOrder">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalDeleteOrder">
+        <Title>Удалить распоряжение?</Title>
+        <Body>
+            <form>
+                <div class="alert alert-danger" role="alert">Внимание! Отменить удаление невозможно!</div>
+                <div class="form-group">
+                    <label for="obj-order-number" class="col-form-label">Номер</label>
+                    <input type="text" class="form-control" id="obj-order-number" @bind="objOrder.Number" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="obj-order-date" class="col-form-label">Дата</label>
+                    <input type="date" class="form-control" id="obj-order-date" @bind="objOrder.Date" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="obj-order-sum" class="col-form-label">Сумма</label>
+                    <input type="number" class="form-control" id="obj-order-sum" @bind="objOrder.Sum" readonly>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-danger" @onclick="SaveDeleteOrder">Удалить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalDeleteOrder" @onclick="() => modalDeleteOrder.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalNewIndexation">
+        <Title>Добавить индексацию</Title>
+        <Body>
+            <form>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-indexation-number" class="col-form-label">Номер</label>
+                        <input type="text" class="form-control" id="obj-indexation-number" @bind="objIndexation.Number">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-indexation-date" class="col-form-label">Дата</label>
+                        <input type="date" class="form-control" id="obj-indexation-date" @bind="objIndexation.Date">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="obj-indexation-sum" class="col-form-label">Сумма</label>
+                    <input type="number" class="form-control" id="obj-indexation-sum" @bind="objIndexation.Sum">
+                </div>
+                <div class="form-group">
+                    <label for="obj-indexation-description" class="col-form-label">Примечание</label>
+                    <textarea type="text" class="form-control" id="obj-indexation-description" @bind="objIndexation.Description"></textarea>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveNewIndexation">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalNewIndexation" @onclick="() => modalNewIndexation.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalEditIndexation">
+        <Title>Редактировать индексацию</Title>
+        <Body>
+            <form>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-indexation-number" class="col-form-label">Номер</label>
+                        <input type="text" class="form-control" id="obj-indexation-number" @bind="objIndexation.Number">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-indexation-date" class="col-form-label">Дата</label>
+                        <input type="date" class="form-control" id="obj-indexation-date" @bind="objIndexation.Date">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="obj-indexation-sum" class="col-form-label">Сумма</label>
+                    <input type="number" class="form-control" id="obj-indexation-sum" @bind="objIndexation.Sum">
+                </div>
+                <div class="form-group">
+                    <label for="obj-indexation-description" class="col-form-label">Примечание</label>
+                    <textarea type="text" class="form-control" id="obj-indexation-description" @bind="objIndexation.Description"></textarea>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveEditIndexation">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalEditIndexation" @onclick="CancelEditIndexation">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalDeleteIndexation">
+        <Title>Удалить индексацию?</Title>
+        <Body>
+            <form>
+                <div class="alert alert-danger" role="alert">Внимание! Отменить удаление невозможно!</div>
+                <div class="form-group">
+                    <label for="obj-indexation-number" class="col-form-label">Номер</label>
+                    <input type="text" class="form-control" id="obj-indexation-number" @bind="objIndexation.Number" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="obj-indexation-date" class="col-form-label">Дата</label>
+                    <input type="text" class="form-control" id="obj-indexation-date" @bind="objIndexation.Date" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="obj-indexation-sum" class="col-form-label">Сумма</label>
+                    <input type="number" class="form-control" id="obj-indexation-sum" @bind="objIndexation.Sum" readonly>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-danger" @onclick="SaveDeleteIndexation">Удалить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalDeleteIndexation" @onclick="() => modalDeleteIndexation.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+</section>
+
+@code{
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    
+    [Parameter]
+    public int certificateId { get; set; }
+
+    Certificate objCertificate = new Certificate();
+    Child objChild = new Child();
+    Order objOrder = new Order();
+    Indexation objIndexation = new Indexation();
+
+    public string genderName;
+    
+    public decimal SumInd = 0; //Общая сумма индексации
+    public decimal SumWithInd = 0; //Размер капитала с учeтом индексации
+    public decimal SumOrders = 0; //Общая сумма по распоряжениям
+    public decimal SumBalance = 0; //Остаток капитала
+
+    private List<Gender> _genderList = new List<Gender>();
+    private List<Destination> _destinationList = new List<Destination>();
+
+    private List<Child> _childList = new List<Child>();
+    private List<Order> _orderList = new List<Order>();
+    private List<Indexation> _indexationList = new List<Indexation>();
+
+    private Modal modalEdit { get; set; }
+    private Modal modalDelete { get; set; }
+    private Modal modalNewChild { get; set; }
+    private Modal modalEditChild { get; set; }
+    private Modal modalDeleteChild { get; set; }
+    private Modal modalNewOrder { get; set; }
+    private Modal modalEditOrder { get; set; }
+    private Modal modalDeleteOrder { get; set; }
+    private Modal modalNewIndexation { get; set; }
+    private Modal modalEditIndexation { get; set; }
+    private Modal modalDeleteIndexation { get; set; }
+
+    public string textErrorModalEdit = "";
+    public string textErrorModalNewChild = "";
+    public string textErrorModalNewOrder = "";
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        objCertificate = await certificateService.GetOneAsync(certificateId);
+        genderName = objCertificate.Gender.Name;
+
+        _genderList = await genderService.GetAllAsync();
+        _destinationList = await destinationService.GetAllAsync();
+
+        _childList = await childService.GetAllAsync();
+        _childList = _childList.Where(c => c.CertificateId == certificateId).ToList();
+
+        _orderList = await orderService.GetAllAsync();
+        _orderList = _orderList.Where(o => o.CertificateId == certificateId).ToList();
+
+        _indexationList = await indexationService.GetAllAsync();
+        _indexationList = _indexationList.Where(i => i.CertificateId == certificateId).ToList();
+
+        CalcSums();
+
+        await base.OnInitializedAsync();
+    }
+
+    public void CalcSums()
+    {
+        SumInd = _indexationList.Sum(i => i.Sum);
+        SumWithInd = objCertificate.Sum + SumInd;
+        SumOrders = _orderList.Sum(i => i.Sum);
+        SumBalance = SumWithInd - SumOrders;
+    }
+
+    async Task SaveEdit()
+    {
+        if (await ValidModalEdit() == true)
+        {
+            await certificateService.UpdateAsync(objCertificate);
+            objCertificate = await certificateService.GetOneAsync(certificateId);
+            genderName = objCertificate.Gender.Name;
+
+            CalcSums();
+            modalEdit.Close();
+        }
+    }
+
+    public async Task<bool> ValidModalEdit()
+    {
+        textErrorModalEdit = "";
+
+        if (objCertificate.Number == 0 || objCertificate.GenderId == null || objCertificate.Sum == 0)
+        {
+            textErrorModalEdit = "Заполните обязательные поля!";
+        }
+
+        // Проверяем наличие в базе такого номера сертификата
+        var editedCertificate = await certificateService.GetOneAsync(certificateId);
+        if ((editedCertificate.Number != objCertificate.Number) && (await certificateService.FindByNumberAsync(objCertificate.Number) == true))
+        {
+            textErrorModalEdit = textErrorModalEdit + " Сертиифкат с номером " + objCertificate.Number + " уже есть в базе!";
+        }
+        if (textErrorModalEdit == "")
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    async Task CancelEdit()
+    {
+        textErrorModalEdit = "";
+        objCertificate = await certificateService.GetOneAsync(certificateId);
+        genderName = objCertificate.Gender.Name;
+
+        CalcSums();
+        modalEdit.Close();
+    }
+
+    async Task Delete()
+    {
+        await certificateService.DeleteAsync(objCertificate.Id);
+        modalDelete.Close();
+        NavigationManager.NavigateTo("certificates");
+    }
+
+
+
+    void ShowNewChildDialog()
+    {
+        objChild = new Child();
+        objChild.CertificateId = objCertificate.Id;
+        objChild.DateOfBirth = DateTime.Now.Date;
+        objChild.Citizenship = "РФ";
+        modalNewChild.Open();
+    }
+
+    async Task SaveNewChild()
+    {
+        if (ValidModalNewChild())
+        {
+            await childService.CreateAsync(objChild);
+            _childList = await childService.GetAllAsync();
+            _childList = _childList.Where(c => c.CertificateId == certificateId).ToList();
+            modalNewChild.Close();
+        }
+    }
+
+    public bool ValidModalNewChild()
+    {
+        textErrorModalNewChild = "";
+        if (objChild.GenderId == null)
+        {
+            textErrorModalNewChild = "Заполните обязательные поля!";
+        }
+        if (textErrorModalNewChild == "")
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public void EditChild(Child _Child)
+    {
+        objChild = _Child;
+        modalEditChild.Open();
+    }
+
+    async Task SaveEditChild()
+    {
+        await childService.UpdateAsync(objChild);
+
+        _childList = await childService.GetAllAsync();
+        _childList = _childList.Where(c => c.CertificateId == certificateId).ToList();
+
+        modalEditChild.Close();
+    }
+
+    async Task CancelEditChild()
+    {
+        objCertificate = await certificateService.GetOneAsync(certificateId);
+
+        _childList = await childService.GetAllAsync();
+        _childList = _childList.Where(c => c.CertificateId == certificateId).ToList();
+
+        modalEditChild.Close();
+    }
+
+    public void DeleteChild(Child _Child)
+    {
+        objChild = _Child;
+        modalDeleteChild.Open();
+    }
+
+    async Task SaveDeleteChild()
+    {
+        await childService.DeleteAsync(objChild.Id);
+        _childList = await childService.GetAllAsync();
+        _childList = _childList.Where(c => c.CertificateId == certificateId).ToList();
+        modalDeleteChild.Close();
+    }
+
+
+
+    void ShowNewOrderDialog()
+    {
+        objOrder = new Order();
+        objOrder.CertificateId = objCertificate.Id;
+        objOrder.Date = DateTime.Now.Date;
+        objOrder.DatePay = DateTime.Now.Date;
+        objOrder.Sum = SumBalance;
+        modalNewOrder.Open();
+    }
+
+    async Task SaveNewOrder()
+    {
+        if (ValidModalNewOrder())
+        {
+            await orderService.CreateAsync(objOrder);
+            _orderList = await orderService.GetAllAsync();
+            _orderList = _orderList.Where(o => o.CertificateId == certificateId).ToList();
+
+            CalcSums();
+            modalNewOrder.Close();
+        }
+    }
+
+    public bool ValidModalNewOrder()
+    {
+        textErrorModalNewOrder = "";
+        if (objOrder.DestinationId == null)
+        {
+            textErrorModalNewOrder = "Заполните обязательные поля!";
+        }
+        if (textErrorModalNewOrder == "")
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public void EditOrder(Order Order)
+    {
+        objOrder = Order;
+        modalEditOrder.Open();
+    }
+
+    async Task SaveEditOrder()
+    {
+        await orderService.UpdateAsync(objOrder);
+
+        _orderList = await orderService.GetAllAsync();
+        _orderList = _orderList.Where(o => o.CertificateId == certificateId).ToList();
+
+        CalcSums();
+        modalEditOrder.Close();
+    }
+
+    async Task CancelEditOrder()
+    {
+        objCertificate = await certificateService.GetOneAsync(certificateId);
+
+        _orderList = await orderService.GetAllAsync();
+        _orderList = _orderList.Where(o => o.CertificateId == certificateId).ToList();
+
+        modalEditOrder.Close();
+    }
+
+    public void DeleteOrder(Order _Order)
+    {
+        objOrder = _Order;
+        modalDeleteOrder.Open();
+    }
+
+    async Task SaveDeleteOrder()
+    {
+        await orderService.DeleteAsync(objOrder.Id);
+        _orderList = await orderService.GetAllAsync();
+        _orderList = _orderList.Where(o => o.CertificateId == certificateId).ToList();
+
+        CalcSums();
+        modalDeleteOrder.Close();
+    }
+
+
+
+    void ShowNewIndexationDialog()
+    {
+        objIndexation = new Indexation();
+        objIndexation.CertificateId = objCertificate.Id;
+        objIndexation.Date = DateTime.Now.Date;
+        modalNewIndexation.Open();
+    }
+
+    async Task SaveNewIndexation()
+    {
+        await indexationService.CreateAsync(objIndexation);
+        _indexationList = await indexationService.GetAllAsync();
+        _indexationList = _indexationList.Where(i => i.CertificateId == certificateId).ToList();
+
+        CalcSums();
+        modalNewIndexation.Close();
+    }
+
+    public void EditIndexation(Indexation Indexation)
+    {
+        objIndexation = Indexation;
+        modalEditIndexation.Open();
+    }
+
+    async Task SaveEditIndexation()
+    {
+        await indexationService.UpdateAsync(objIndexation);
+        _indexationList = await indexationService.GetAllAsync();
+        _indexationList = _indexationList.Where(i => i.CertificateId == certificateId).ToList();
+
+        CalcSums();
+        modalEditIndexation.Close();
+    }
+
+    async Task CancelEditIndexation()
+    {
+        objCertificate = await certificateService.GetOneAsync(certificateId);
+        _indexationList = await indexationService.GetAllAsync();
+        _indexationList = _indexationList.Where(i => i.CertificateId == certificateId).ToList();
+
+        modalEditIndexation.Close();
+    }
+
+    public void DeleteIndexation(Indexation _Indexation)
+    {
+        objIndexation = _Indexation;
+        modalDeleteIndexation.Open();
+    }
+
+    async Task SaveDeleteIndexation()
+    {
+        await indexationService.DeleteAsync(objIndexation.Id);
+        _indexationList = await indexationService.GetAllAsync();
+        _indexationList = _indexationList.Where(i => i.CertificateId == certificateId).ToList();
+
+        CalcSums();
+        modalDeleteIndexation.Close();
+    }
+}

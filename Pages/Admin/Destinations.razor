@@ -1,0 +1,183 @@
+@page "/admin/destinations"
+@attribute [Authorize(Roles = "Администраторы")]
+@using ParentCapitalBlazor.Data
+@inject IDestinationService destinationService
+@inject IOrderService orderService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h1>Направления</h1>
+<section class="content-container">
+    <p>Справочик направлений расходования средств</p>
+
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th><button type="button" class="btn btn-primary" @onclick="ShowNewDialog"><span class="oi oi-plus" aria-hidden="true"></span></button></th>
+                <th scope="col">Код</th>
+                <th scope="col">Направление</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in _destinationList)
+            {
+                <tr>
+                    <th>
+                        <button type="button" class="btn btn-warning" @onclick="(() => ShowEditDialog(item))"><span class="oi oi-pencil" aria-hidden="true"></span></button>
+                        <button type="button" class="btn btn-danger" @onclick="(() => ShowDeleteDialog(item))"><span class="oi oi-trash" aria-hidden="true"></span></button>
+                    </th>
+                    <td scope="row">@item.Id</td>
+                    <td>@item.Name</td>
+                </tr>
+            } 
+        </tbody>
+    </table>
+
+    <Modal @ref="modalNew">
+        <Title>Cоздать</Title>
+        <Body>
+            <form>
+                <div class="form-group">
+                    <label for="obj-name" class="col-form-label">Направление</label>
+                    <input type="text" class="form-control" id="obj-name" @bind="objDestination.Name">
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveNew">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalNew" @onclick="() => modalNew.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalEdit">
+        <Title>Редактировать</Title>
+        <Body>
+            <form>
+                <div class="form-group">
+                    <label for="obj-id" class="col-form-label">Код</label>
+                    <input type="text" class="form-control" id="obj-id" @bind="objDestination.Id" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="obj-name" class="col-form-label">Направление</label>
+                    <input type="text" class="form-control" id="obj-name" @bind="objDestination.Name">
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveEdit">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalEdit" @onclick="CancelEdit">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalDelete">
+        <Title>Удалить?</Title>
+        <Body>
+            <form>
+                @if(@textErrorModalDelete != "")
+                {
+                    <div class="alert alert-danger" role="alert">@textErrorModalDelete</div>
+                }
+                <div class="form-group">
+                    <label for="obj-id" class="col-form-label">Код</label>
+                    <input type="text" class="form-control" id="obj-id" @bind="objDestination.Id" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="obj-name" class="col-form-label">Направление</label>
+                    <input type="text" class="form-control" id="obj-name" @bind="objDestination.Name" readonly>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-danger" @onclick="Delete">Удалить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalDelete" @onclick="() => modalDelete.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+</section>
+
+@code{
+    private List<Destination> _destinationList = new List<Destination>();
+    Destination objDestination = new Destination();
+
+    private Modal modalNew { get; set; }
+    private Modal modalEdit { get; set; }
+    private Modal modalDelete { get; set; }
+    
+    public string textErrorModalDelete = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _destinationList = await destinationService.GetAllAsync();
+
+        await base.OnInitializedAsync();
+    }
+
+    void ShowNewDialog()
+    {
+        objDestination = new Destination();
+        modalNew.Open();
+    }
+
+    async Task SaveNew()
+    {
+        await destinationService.CreateAsync(objDestination);
+        _destinationList = await destinationService.GetAllAsync();
+        modalNew.Close();
+    }
+
+    void ShowEditDialog(Destination destination)
+    {
+        objDestination = destination;
+        modalEdit.Open();
+    }
+
+    async Task SaveEdit()
+    {
+        await destinationService.UpdateAsync(objDestination);
+        _destinationList = await destinationService.GetAllAsync();
+        modalEdit.Close();
+    }
+
+    async Task CancelEdit()
+    {
+        _destinationList = await destinationService.GetAllAsync();
+        modalEdit.Close();
+    }
+
+    void ShowDeleteDialog(Destination destination)
+    {
+        textErrorModalDelete = "";
+        objDestination = destination;
+        modalDelete.Open();
+    }
+
+    async Task Delete()
+    {
+        if (await ValidModalDelete() == true)
+        {
+            await destinationService.DeleteAsync(objDestination.Id);
+            _destinationList = await destinationService.GetAllAsync();
+            modalDelete.Close();
+        }
+    }
+
+    public async Task<bool> ValidModalDelete()
+    {
+        textErrorModalDelete = "";
+
+        // Проверяем наличие в базе распоряжений с таким типом
+        var orderList = await orderService.GetAllAsync();
+        var orderDistCount = orderList.Where(o => o.DestinationId == objDestination.Id).Count();
+
+        if (orderDistCount != 0)
+        {
+            textErrorModalDelete = "Удалить данное направление невозможно! Оно используется в распоряжениях!";
+        }
+        if (textErrorModalDelete == "")
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+}

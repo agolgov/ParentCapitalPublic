@@ -1,0 +1,254 @@
+﻿@page "/certificates"
+@attribute [Authorize(Roles = "Администраторы, Департамент, ОСЗН")]
+@using ParentCapitalBlazor.Data
+@inject ICertificateService certificateService
+@inject IGenderService genderService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+@using Microsoft.Extensions.Logging
+@inject ILogger<Certificates> Logger
+
+
+<section class="content-container">
+    <h1>Сертификаты 
+        <button type="button" class="btn btn-outline-secondary" @onclick="ShowFilterDialog" title="Фильтр списка сертификатов">
+            <span class="oi oi-magnifying-glass" aria-hidden="true"></span></button>
+        <small class="text-muted">@this.strFilter</small>
+    </h1>
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th><button type="button" class="btn btn-primary" @onclick="ShowNewDialog" title="Добавить сертификат">
+                        <span class="oi oi-file" aria-hidden="true"></span>
+                    </button>
+                </th>
+                <th scope="col">Номер</th>
+                <th scope="col">Дата</th>
+                <th scope="col" class="text-right">Размер капитала</th>
+                <th scope="col">ФИО</th>
+                <th scope="col">Пол</th>
+                <th scope="col">Дата рождения</th>
+                <th scope="col">Адрес</th>
+                <th scope="col">Документ</th>
+                <th scope="col">Примечание</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in _certificateList)
+            {
+                <tr>
+                    <th>
+                        <a class="btn btn-info" href="certificates/@item.Id" title="Открыть подробнее">
+                            <span class="oi oi-external-link"></span></a>
+                    </th>
+                    <td scope="row">@item.Number</td>
+                    <td>@item.Date.ToShortDateString()</td>
+                    <td class="text-right">@item.Sum.ToString("N2")</td>
+                    <td>@item.Parent</td>
+                    <td>@item.Gender.Name</td>
+                    <td>@item.DateOfBirth.ToShortDateString()</td>
+                    <td>@item.Address</td>
+                    <td>@item.Document</td>
+                    <td style="white-space: pre-line">@item.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <Modal @ref="modalFilter">
+        <Title>Фильтр списка сертификатов</Title>
+        <Body>
+            <form>
+                <div class="form-group">
+                    <label for="fnum" class="col-form-label">Номер</label>
+                    <input type="text" class="form-control" id="fnum" @bind="fNumber">
+                </div>
+                <div class="form-group">
+                    <label for="fparent" class="col-form-label">ФИО</label>
+                    <input type="text" class="form-control" id="fparent" @bind="fParent">
+                </div>
+                <div class="form-group">
+                    <label for="faddress" class="col-form-label">Адрес</label>
+                    <input type="text" class="form-control" id="faddress" @bind="fAddress">
+                </div>
+                <div class="form-group">
+                    <label for="fdocument" class="col-form-label">Документ</label>
+                    <input type="text" class="form-control" id="fdocument" @bind="fDocument">
+                </div>
+                <div class="form-group">
+                    <label for="fdescription" class="col-form-label">Примечание</label>
+                    <input type="text" class="form-control" id="fdescription" @bind="fDescription">
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="ApplyFilter">Фильтровать</button>
+            <button type="button" class="btn btn-light" @onclick="ResetFilter">Сбросить фильтр</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalNew" @onclick="() => modalFilter.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+
+    <Modal @ref="modalNew">
+        <Title>Новый сертификат</Title>
+        <Body>
+            <form>
+                @if(@textErrorModalNew != "")
+                {
+                    <div class="alert alert-danger" role="alert">@textErrorModalNew</div>
+                }
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-certificate-num" class="col-form-label">Номер</label>
+                        <input type="number" class="form-control" id="obj-certificate-num" @bind="objCertificate.Number">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-certificate-date" class="col-form-label">Дата</label>
+                        <input type="date" class="form-control" id="obj-certificate-date" @bind="objCertificate.Date">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="obj-certificate-sum" class="col-form-label">Размер капитала</label>
+                    <input type="number" class="form-control" id="obj-certificate-sum" @bind="objCertificate.Sum">
+                </div>
+                <div class="form-group">
+                    <label for="obj-certificate-parent" class="col-form-label">ФИО</label>
+                    <input type="text" class="form-control" id="obj-certificate-parent" @bind="objCertificate.Parent">
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="obj-certificate-gender" class="col-form-label">Пол</label>
+                        <select class="form-control" id="obj-certificate-gender" @bind="objCertificate.GenderId">
+                            <option value="" selected disabled hidden>---</option>
+                            @foreach (var item in _genderList)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="obj-certificate-dob" class="col-form-label">Дата рождения</label>
+                        <input type="date" class="form-control" id="obj-certificate-dob" @bind="objCertificate.DateOfBirth">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="obj-certificate-address" class="col-form-label">Адрес</label>
+                    <input type="text" class="form-control" id="obj-certificate-address" @bind="objCertificate.Address">
+                </div>
+                <div class="form-group">
+                    <label for="obj-certificate-document" class="col-form-label">Документ</label>
+                    <input type="text" class="form-control" id="obj-certificate-document" @bind="objCertificate.Document">
+                </div>
+                <div class="form-group">
+                    <label for="obj-certificate-description" class="col-form-label">Примечание</label>
+                    <textarea type="text" class="form-control" id="obj-certificate-description" @bind="objCertificate.Description"></textarea>
+                </div>
+            </form>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="SaveNew">Сохранить</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modalNew" @onclick="() => modalNew.Close()">Закрыть</button>
+        </Footer>
+    </Modal>
+</section>
+
+@code{
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    
+    Certificate objCertificate = new Certificate();
+
+    private List<Certificate> _certificateList = new List<Certificate>();
+    private List<Gender> _genderList = new List<Gender>();
+
+    private Modal modalFilter { get; set; }
+    private Modal modalNew { get; set; }
+
+    public string strFilter = "";
+    public string fNumber = "";
+    public string fParent = "";
+    public string fAddress = "";
+    public string fDocument = "";
+    public string fDescription = "";
+
+    public string textErrorModalNew = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _certificateList = await certificateService.GetAllAsync();
+        _genderList = await genderService.GetAllAsync();
+        await base.OnInitializedAsync();
+    }
+
+    void ShowFilterDialog()
+    {
+        objCertificate = new Certificate();
+        modalFilter.Open();
+    }
+
+    async Task ApplyFilter()
+    {
+        _certificateList = await certificateService.GetAllAsync();
+        _certificateList = _certificateList.Where(c => c.Number.ToString().Contains(fNumber) && 
+                                                       c.Parent.ToUpper().Contains(fParent.ToUpper()) && 
+                                                       c.Address.ToUpper().Contains(fAddress.ToUpper()) && 
+                                                       c.Document.ToUpper().Contains(fDocument.ToUpper()) && 
+                                                       c.Description.ToUpper().Contains(fDescription.ToUpper())).ToList();
+        strFilter = "фильтр: " + fNumber + " " + fParent + " " + fAddress + " " + fDocument + " " + fDescription;
+        modalFilter.Close();
+    }
+
+    async Task ResetFilter()
+    {
+        strFilter = "";
+        fNumber = "";
+        fParent = "";
+        fAddress = "";
+        fDocument = "";
+        fDescription = "";
+        _certificateList = await certificateService.GetAllAsync();
+        modalFilter.Close();
+    }
+
+    void ShowNewDialog()
+    {
+        objCertificate = new Certificate();
+        objCertificate.Date = DateTime.Now.Date;
+        objCertificate.DateOfBirth = DateTime.Now.Date;
+
+        objCertificate.Number = _certificateList.Max(c => (int?)c.Number) + 1 ?? 1;
+        modalNew.Open();
+    }
+
+    async Task SaveNew()
+    {
+        if (await ValidModalNew() == true)
+        {
+            await certificateService.CreateAsync(objCertificate);
+            _certificateList = await certificateService.GetAllAsync();
+            modalNew.Close();
+        }
+    }
+
+    public async Task<bool> ValidModalNew()
+    {
+        textErrorModalNew = "";
+
+        if (objCertificate.Number == 0 || objCertificate.GenderId == null || objCertificate.Sum == 0)
+        {
+            textErrorModalNew = "Заполните обязательные поля!";
+        }
+
+        // Проверяем наличие в базе такого номера сертификата
+        if (await certificateService.FindByNumberAsync(objCertificate.Number) == true)
+        {
+            textErrorModalNew = textErrorModalNew + " Сертиифкат с номером " + objCertificate.Number + " уже есть в базе!";
+        }
+        if (textErrorModalNew == "")
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+}
