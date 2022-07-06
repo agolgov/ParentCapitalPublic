@@ -1,0 +1,388 @@
+﻿@page "/reports"
+@inject IGenderService genderService
+@inject IDestinationService destinationService
+@inject ICertificateService certificateService
+@inject IChildService childService
+@inject IOrderService orderService
+@inject IIndexationService indexationService
+
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<AuthorizeView>
+    <Authorized>
+        <h1>Отчеты</h1>
+        <h3>Параметры отчета</h3>
+        <form>
+            <div class="form-row">
+                <div class="form-group col-lg-3">
+                        <label for="db" class="col-form-label">Дата начала (включительно): </label>
+                        <input type="date" class="form-control" id="db" @bind="this.RepDateBegin">
+                </div>
+                <div class="form-group col-lg-3">
+                    <label for="de" class="col-form-label">Дата окончания (включительно): </label>
+                    <input type="date" class="form-control" id="de" @bind="this.RepDateEnd">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <button type="button" class="btn btn-primary" @onclick="Report">Сформировать отчет</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="Clear">Очистить</button>
+                </div>
+            </div>
+        </form>
+
+        <div>
+            <h3>Отчет по Выданные сертификаты
+                @if(RepDateTime != "")
+                {
+                    <small class="text-muted">
+                        на дату: @RepDateTime (за период: @DateBegin.ToShortDateString() - @DateEnd.ToShortDateString())
+                    </small>
+                }
+            </h3>
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th scope="col">Наименование показателя</th>
+                        <th class="text-right" scope="col">Количество</th>
+                        <th class="text-right" scope="col">Сумма</th>
+                        <th class="text-right" scope="col">Сумма с индексацией</th>
+                        <th class="text-right" scope="col">Расход</th>
+                        <th class="text-right" scope="col">Остаток</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Все сертификаты</td>
+                        <td class="text-right">@TotalCertificates.ToString("N0")</td>
+                        <td class="text-right">@TotalCertificatesSum.ToString("N2")</td>
+                        <td class="text-right">@TotalCertificatesSumIndexations.ToString("N2")</td>
+                        <td class="text-right">@TotalCertificatesSumOrders.ToString("N2")</td>
+                        <td class="text-right">@TotalCertificatesSumRest.ToString("N2")</td>
+                    </tr>
+                    <tr>
+                        <td>Полностью закрытые сертификаты</td>
+                        <td class="text-right">@CloseCertificates.ToString("N0")</td>
+                        <td class="text-right">@CloseCertificatesSum.ToString("N2")</td>
+                        <td class="text-right">@CloseCertificatesSumIndexations.ToString("N2")</td>
+                        <td class="text-right">@CloseCertificatesSumOrders.ToString("N2")</td>
+                        <td class="text-right">@CloseCertificatesSumRest.ToString("N2")</td>
+                    </tr>
+                    <tr>
+                        <td>Частично закрытые сертификаты</td>
+                        <td class="text-right">@BeginCertificates.ToString("N0")</td>
+                        <td class="text-right">@BeginCertificatesSum.ToString("N2")</td>
+                        <td class="text-right">@BeginCertificatesSumIndexations.ToString("N2")</td>
+                        <td class="text-right">@BeginCertificatesSumOrders.ToString("N2")</td>
+                        <td class="text-right">@BeginCertificatesSumRest.ToString("N2")</td>
+                    </tr>
+                    <tr>
+                        <td>Полностью открытые сертификаты</td>
+                        <td class="text-right">@OpenCertificates.ToString("N0")</td>
+                        <td class="text-right">@OpenCertificatesSum.ToString("N2")</td>
+                        <td class="text-right">@OpenCertificatesSumIndexations.ToString("N2")</td>
+                        <td class="text-right">@OpenCertificatesSumOrders.ToString("N2")</td>
+                        <td class="text-right">@OpenCertificatesSumRest.ToString("N2")</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div>
+            <h3>Отчет по распоряжениям на материнский капитал
+                @if(RepDateTime != "")
+                {
+                    <small class="text-muted">
+                        на дату: @RepDateTime (за период: @DateBegin.ToShortDateString() - @DateEnd.ToShortDateString())
+                    </small>
+                }
+            </h3>
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th scope="col">Направление материнского капитала</th>
+                        <th class="text-right" scope="col">Кол-во выданных распоряжений</th>
+                        <th class="text-right" scope="col">Кол-во сертификатов по выданным распоряжениям</th>
+                        <th class="text-right" scope="col">Сумма по выданным распоряжениям</th>
+                        <th class="text-right" scope="col">Кол-во оплаченных распоряжений</th>
+                        <th class="text-right" scope="col">Кол-во сертификатов по оплаченным распоряжениям</th>
+                        <th class="text-right" scope="col">Сумма по оплаченным распоряжениям</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        foreach (var item in _destinationList)
+                        {
+                            <tr>
+                                <td scope="row">@item.Name</td>
+                                @{
+                                    var repItemOrdersCount = _orderList
+                                        .Where(o => o.Date >= DateBegin & o.Date <= DateEnd & o.DestinationId == item.Id)
+                                        .Count();
+                                }
+                                <td class="text-right">@repItemOrdersCount.ToString("N0")</td>
+                                @{
+                                    var repItemOrdersCerCount = _orderList
+                                        .Where(o => o.Date >= DateBegin & o.Date <= DateEnd & o.DestinationId == item.Id)
+                                        .GroupBy(o => o.CertificateId)
+                                        .Select(cl => new { CountOrd = cl.Count() })
+                                        .Count();
+                                }
+                                <td class="text-right">@repItemOrdersCerCount.ToString("N0")</td>
+                                @{
+                                    var repItemOrdersSum = _orderList
+                                        .Where(o => o.Date >= DateBegin & o.Date <= DateEnd & o.DestinationId == item.Id)
+                                        .Sum(o => o.Sum);
+                                }
+                                <td class="text-right">@repItemOrdersSum.ToString("N2")</td>
+                                @{
+                                    var repItemPayOrdersCount = _orderList
+                                        .Where(o => o.DatePay >= DateBegin & o.DatePay <= DateEnd & o.DestinationId == item.Id)
+                                        .Count();
+                                }
+                                <td class="text-right">@repItemPayOrdersCount.ToString("N0")</td>
+                                @{
+                                    var repItemPayOrdersCerCount = _orderList
+                                        .Where(o => o.DatePay >= DateBegin & o.DatePay <= DateEnd & o.DestinationId == item.Id)
+                                        .GroupBy(o => o.CertificateId)
+                                        .Select(cl => new { CountOrd = cl.Count() })
+                                        .Count();
+                                }
+                                <td class="text-right">@repItemPayOrdersCerCount.ToString("N0")</td>
+                                @{
+                                    var repItemPayOrdersSum = _orderList
+                                        .Where(o => o.DatePay >= DateBegin & o.DatePay <= DateEnd & o.DestinationId == item.Id)
+                                        .Sum(o => o.Sum);
+                                }
+                                <td class="text-right">@repItemPayOrdersSum.ToString("N2")</td>
+                            </tr>
+                        }
+                    }
+                    <tr>
+                        <td class="text-right" scope="row">Итого:</td>
+                        @{
+                            var repOrdersCount = _orderList
+                                .Where(o => o.Date >= DateBegin & o.Date <= DateEnd)
+                                .Count();
+                        }
+                        <td class="text-right">@repOrdersCount.ToString("N0")</td>
+                        @{
+                            var repOrdersCerCount = _orderList
+                                .Where(o => o.Date >= DateBegin & o.Date <= DateEnd)
+                                .GroupBy(o => o.CertificateId)
+                                .Select(cl => new { CountOrd = cl.Count() })
+                                .Count();
+                        }
+                        <td class="text-right">@repOrdersCerCount.ToString("N0")</td>
+                        @{
+                            var repOrdersSum = _orderList
+                                .Where(o => o.Date >= DateBegin & o.Date <= DateEnd)
+                                .Sum(o => o.Sum);
+                        }
+                        <td class="text-right">@repOrdersSum.ToString("N2")</td>
+                        @{
+                            var repPayOrdersCount = _orderList
+                                .Where(o => o.DatePay >= DateBegin & o.DatePay <= DateEnd)
+                                .Count();
+                        }
+                        <td class="text-right">@repPayOrdersCount.ToString("N0")</td>
+                        @{
+                            var repPayOrdersCerCount = _orderList
+                                .Where(o => o.DatePay >= DateBegin & o.DatePay <= DateEnd)
+                                .GroupBy(o => o.CertificateId)
+                                .Select(cl => new { CountOrd = cl.Count() })
+                                .Count();
+                        }
+                        <td class="text-right">@repPayOrdersCerCount.ToString("N0")</td>
+                        @{
+                            var repPayOrdersSum = _orderList
+                                .Where(o => o.DatePay >= DateBegin & o.DatePay <= DateEnd)
+                                .Sum(o => o.Sum);
+                        }
+                        <td class="text-right">@repPayOrdersSum.ToString("N2")</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <em><a href="Identity/Account/Login">Войдите</a> в систему или <a href="Identity/Account/Register">зарегистрируйтесь</a></em>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code
+{
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+
+    Certificate objCertificate = new Certificate();
+    Child objChild = new Child();
+    Order objOrder = new Order();
+    Indexation objIndexation = new Indexation();
+
+    public string genderName;
+    public DateTime DateBegin = new DateTime();
+    public DateTime DateEnd = new DateTime();
+
+    public DateTime RepDateBegin = new DateTime();
+    public DateTime RepDateEnd = new DateTime();
+    public string RepDateTime;
+    private List<Gender> _genderList = new List<Gender>();
+    private List<Destination> _destinationList = new List<Destination>();
+
+    private List<Certificate> _certificateList = new List<Certificate>();
+    private List<Child> _childList = new List<Child>();
+    private List<Order> _orderList = new List<Order>();
+    private List<Indexation> _indexationList = new List<Indexation>();
+
+    //Все сертификаты
+    public decimal TotalCertificates = 0;
+    public decimal TotalCertificatesSum = 0;
+    public decimal TotalCertificatesSumIndexations = 0;
+    public decimal TotalCertificatesSumOrders = 0;
+    public decimal TotalCertificatesSumRest = 0;
+    //Полностью закрытые сертификаты
+    public decimal CloseCertificates = 0;
+    public decimal CloseCertificatesSum = 0;
+    public decimal CloseCertificatesSumIndexations = 0;
+    public decimal CloseCertificatesSumOrders = 0;
+    public decimal CloseCertificatesSumRest = 0;
+    //Частично закрытые сертификаты
+    public decimal BeginCertificates = 0;
+    public decimal BeginCertificatesSum = 0;
+    public decimal BeginCertificatesSumIndexations = 0;
+    public decimal BeginCertificatesSumOrders = 0;
+    public decimal BeginCertificatesSumRest = 0;
+    //Полностью открытые сертификаты
+    public decimal OpenCertificates = 0;
+    public decimal OpenCertificatesSum = 0;
+    public decimal OpenCertificatesSumIndexations = 0;
+    public decimal OpenCertificatesSumOrders = 0;
+    public decimal OpenCertificatesSumRest = 0;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        RepDateBegin = DateTime.Now.Date;
+        RepDateEnd = DateTime.Now.Date;
+        _destinationList = await destinationService.GetAllAsync();
+        await base.OnInitializedAsync();
+    }
+
+    async Task Report()
+    {
+        DateBegin = RepDateBegin;
+        DateEnd = RepDateEnd;
+        RepDateTime = DateTime.Now.ToShortDateString() + " " + @DateTime.Now.ToLongTimeString();
+        _genderList = await genderService.GetAllAsync();
+        
+        _orderList = await orderService.GetAllAsync();
+        _indexationList = await indexationService.GetAllAsync();
+
+        _certificateList = await certificateService.GetAllPeriodAsync(DateBegin, DateEnd);
+
+        foreach (Certificate certificate in _certificateList)
+        {
+            //Все сертификаты - Сумма
+            decimal Sum = certificate.Sum;
+            //Все сертификаты - Сумма с индексацией
+            decimal SumIndexations = Sum + certificate.Indexations.Sum(i => i.Sum);
+            //Все сертификаты - Расход
+            decimal SumOrders = certificate.Orders.Sum(o => o.Sum);
+            //Все сертификаты - Остаток
+            decimal SumRest = SumIndexations - SumOrders;
+
+            //Все сертификаты - Количество
+            TotalCertificates +=1;
+            //Все сертификаты - Сумма
+            TotalCertificatesSum += Sum;
+            //Все сертификаты - Сумма с индексацией
+            TotalCertificatesSumIndexations += SumIndexations;
+            //Все сертификаты - Расход
+            TotalCertificatesSumOrders += SumOrders;
+            //Все сертификаты - Остаток
+            TotalCertificatesSumRest += SumRest;
+
+            //Полностью закрытые сертификаты
+            if (SumRest == 0)
+            {
+                //Количество
+                CloseCertificates += 1;
+                //Сумма
+                CloseCertificatesSum += Sum;
+                //Сумма с индексацией
+                CloseCertificatesSumIndexations += SumIndexations;
+                //Расход
+                CloseCertificatesSumOrders += SumOrders;
+                //Остаток
+                CloseCertificatesSumRest += SumRest;
+            }
+
+            //Частично закрытые сертификаты (есть распоряжения, но остаток не нулевой)
+            if (SumRest != 0 && SumOrders != 0)
+            {
+                //Количество
+                BeginCertificates += 1;
+                //Сумма
+                BeginCertificatesSum += Sum;
+                //Сумма с индексацией
+                BeginCertificatesSumIndexations += SumIndexations;
+                //Расход
+                BeginCertificatesSumOrders += SumOrders;
+                //Остаток
+                BeginCertificatesSumRest += SumRest;
+            }
+
+            //Полностью открытые сертификаты
+            if (SumOrders == 0)
+            {
+                //Количество
+                OpenCertificates += 1;
+                //Сумма
+                OpenCertificatesSum += Sum;
+                //Сумма с индексацией
+                OpenCertificatesSumIndexations += SumIndexations;
+                //Расход
+                OpenCertificatesSumOrders += SumOrders;
+                //Остаток
+                OpenCertificatesSumRest += SumRest;
+            }
+        }
+    }
+
+    public void Clear()
+    {
+        DateBegin = DateTime.Now.Date;
+        DateEnd = DateTime.Now.Date;
+
+        RepDateBegin = DateTime.Now.Date;
+        RepDateEnd = DateTime.Now.Date;
+        RepDateTime = "";
+
+        TotalCertificates = 0;
+        TotalCertificatesSum = 0;
+        TotalCertificatesSumIndexations = 0;
+        TotalCertificatesSumOrders = 0;
+        TotalCertificatesSumRest = 0;
+        CloseCertificates = 0;
+        CloseCertificatesSum = 0;
+        CloseCertificatesSumIndexations = 0;
+        CloseCertificatesSumOrders = 0;
+        CloseCertificatesSumRest = 0;
+        BeginCertificates = 0;
+        BeginCertificatesSum = 0;
+        BeginCertificatesSumIndexations = 0;
+        BeginCertificatesSumOrders = 0;
+        BeginCertificatesSumRest = 0;
+        OpenCertificates = 0;
+        OpenCertificatesSum = 0;
+        OpenCertificatesSumIndexations = 0;
+        OpenCertificatesSumOrders = 0;
+        OpenCertificatesSumRest = 0;
+
+        _orderList.Clear();
+        _certificateList.Clear();
+    }
+}
+ 

@@ -1,0 +1,55 @@
+﻿@page "/children"
+@attribute [Authorize(Roles = "Администраторы, Департамент, ОСЗН")]
+@using ParentCapitalBlazor.Data
+@inject IChildService childService 
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h1>Дети</h1>
+<section class="content-container">
+
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th></th>
+                <th scope="col">ФИО</th>
+                <th scope="col">Пол</th>
+                <th scope="col">Дата рождения</th>
+                <th scope="col">Место рождения</th>
+                <th scope="col">Документ</th>
+                <th scope="col">Гражданство</th>
+                <th scope="col">Адрес</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in _childList)
+            {
+                <tr>
+                    <th>
+                        <a class="btn btn-info" href="certificates/@item.CertificateId" title="Открыть подробнее">
+                            <span class="oi oi-external-link"></span></a>
+                    </th>
+                    <td>@item.Name</td>
+                    <td>@item.Gender.Name</td>
+                    <td>@item.DateOfBirth.ToShortDateString()</td>
+                    <td>@item.PlaceOfBirth</td>
+                    <td>@item.Document</td>
+                    <td>@item.Citizenship</td>
+                    <td>@item.Address</td>
+                </tr>
+            } 
+        </tbody>
+    </table>
+</section>
+
+@code{
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    
+    private List<Child> _childList = new List<Child>();
+    
+    protected override async Task OnInitializedAsync()
+    {
+        _childList = await childService.GetAllAsync();
+        await base.OnInitializedAsync();
+    }
+}

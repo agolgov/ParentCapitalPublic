@@ -1,0 +1,52 @@
+﻿@page "/orders"
+@attribute [Authorize(Roles = "Администраторы, Департамент, ОСЗН")]
+@using ParentCapitalBlazor.Data
+@inject IOrderService orderService 
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h1>Распоряжения</h1>
+<section class="content-container">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th></th>
+                <th scope="col">Номер</th>
+                <th scope="col">Дата</th>
+                <th scope="col" class="text-right">Сумма</th>
+                <th scope="col">Дата оплаты</th>
+                <th scope="col">Назначение</th>
+                <th scope="col">Примечание</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in _orderList)
+            {
+                <tr>
+                    <th>
+                        <a class="btn btn-info" href="certificates/@item.CertificateId" title="Открыть подробнее">
+                            <span class="oi oi-external-link"></span></a>
+                    </th>
+                    <td>@item.Number</td>
+                    <td>@item.Date.ToShortDateString()</td>
+                    <td class="text-right">@item.Sum.ToString("N2")</td>
+                    <td>@item.DatePay.ToShortDateString()</td>
+                    <td>@item.Destination.Name</td>
+                    <td>@item.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</section>
+
+@code{
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    
+    private List<Order> _orderList = new List<Order>();
+    
+    protected override async Task OnInitializedAsync()
+    {
+        _orderList = await orderService.GetAllAsync();
+        await base.OnInitializedAsync();
+    }
+}

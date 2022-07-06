@@ -1,0 +1,199 @@
+﻿@page "/indexations"
+@attribute [Authorize(Roles = "Администраторы, Департамент, ОСЗН")]
+@using ParentCapitalBlazor.Data
+@inject ICertificateService certificateService
+@inject IOrderService orderService
+@inject IIndexationService indexationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h1>Индексация</h1>
+<section class="content-container">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>
+                    <AuthorizeView>
+                        <Authorized>
+                            @if (@context.User.IsInRole("Администраторы"))
+                            {
+                                <button type="button" class="btn btn-primary" @onclick="ShowNewDialog">
+                                    <span class="oi oi-plus" aria-hidden="true"></span></button>
+                            }
+                        </Authorized>
+                    </AuthorizeView>
+                </th>
+                <th scope="col">Номер</th>
+                <th scope="col">Дата</th>
+                <th scope="col" class="text-right">Сумма</th>
+                <th scope="col">Примечание</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in _indexationList)
+            {
+                <tr>
+                    <th>
+                        <a class="btn btn-info" href="certificates/@item.CertificateId" title="Открыть подробнее">
+                            <span class="oi oi-external-link"></span></a>
+                    </th>
+                    <td>@item.Number</td>
+                    <td>@item.Date.ToShortDateString()</td>
+                    <td class="text-right">@item.Sum.ToString("N2")</td>
+                    <td>@item.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</section>
+<AuthorizeView>
+    <Authorized>
+        @if (@context.User.IsInRole("Администраторы"))
+        {
+            <Modal @ref="modalNew">
+                <Title>Проведение индексации капиталов</Title>
+                <Body>
+                    <form>
+                        <div class="alert alert-info" role="alert">
+                            <b>Инструкция:</b><br>
+                            <mark>Номер</mark> - можно указать любое значение, обычно указывается порядковый номер индексации МК НАО.<br>
+                            <mark>На дату</mark> - указывается дата, с которой вводится индексация капитала.
+                            При этом индексация будет проводится только на сертификаты с датой раньше или равной дате индексации.
+                            Так как индексация рассчитывается на остаток капитала, то все распоряжения и индексации позже этой
+                            даты не учитываются.<br>
+                            <mark>Коэффициент</mark> - указывается число, которое необходимо умножить на остаток капитала, чтобы определить
+                            сумму индексации.
+                            Например, если сумма материнского капитала повышается с <var>300000р.</var> на <var>35490р.</var> до <var>335490р.</var>,
+                            то коэффициент будет равен <code>35490/300000 = 0,1183</code>. Значение коэффициента необходимо указывать
+                            максимально точно и без округления<br>
+                            <mark>Примечание</mark> - любое значение, обычно слово Индексация и год проведения индексации.
+                        </div>
+                        @if(@textErrorModalNew != "")
+                        {
+                            <div class="alert alert-danger" role="alert">@textErrorModalNew</div>
+                        }
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label for="ind-num" class="col-form-label">Номер</label>
+                                <input type="text" class="form-control" id="ind-num" @bind="indNumber">
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="ind-date" class="col-form-label">На дату</label>
+                                <input type="date" class="form-control" id="ind-date" @bind="indDate">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="ind-coefficient" class="col-form-label">Коэффициент</label>
+                            <input type="text" class="form-control" id="ind-coefficient" @bind="indСoefficient">
+                        </div>
+                        <div class="form-group">
+                            <label for="ind-description" class="col-form-label">Примечание</label>
+                            <textarea type="text" class="form-control" id="ind-description" @bind="indDescription"></textarea>
+                        </div>
+                    </form>
+                </Body>
+                <Footer>
+                    <button type="button" class="btn btn-primary" @onclick="SaveNew">Индексировать</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modalNew" @onclick="() => modalNew.Close()">Закрыть</button>
+                </Footer>
+            </Modal>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code{
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    
+    private List<Indexation> _indexationList = new List<Indexation>();
+    private List<Certificate> _certificateList = new List<Certificate>();
+    private List<Order> _orderList = new List<Order>();
+
+    private Modal modalNew { get; set; }
+
+    //Параметры индексации
+    public string indNumber = "";
+    public DateTime indDate = DateTime.Now;
+    public decimal indСoefficient = 0;
+    public string indDescription = "";
+
+    public string textErrorModalNew = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _indexationList = await indexationService.GetAllAsync();
+        await base.OnInitializedAsync();
+    }
+
+    void ShowNewDialog()
+    {
+        modalNew.Open();
+    }
+
+    async Task SaveNew()
+    {
+        if (ValidModalNew())
+        {
+            // Выбираем все сертификаты с датой раньше или равной дате индексации
+            _certificateList = await certificateService.GetAllForIndexationAsync(indDate);
+
+            // Для сбора статистики
+            //var indCount = 0;
+            //var indTotalSum = 0;
+            
+            foreach (Certificate objCertificate in _certificateList)
+            {
+                Indexation objIndexation = new Indexation();
+
+                objIndexation.Date = indDate;
+                objIndexation.Number = indNumber;
+
+                // Общая сумма распоряжений на дату
+                decimal TotalOrdersForDate = objCertificate.Orders.Where(c => c.Date <= indDate).Sum(o => o.Sum);
+
+                // Общая сумма индексации на дату
+                decimal TotalIndexationsForDate = objCertificate.Indexations.Where(i => i.Date <= indDate).Sum(i => i.Sum);
+
+                // Общий остаток капитала на дату
+                decimal TotalRestForDate = objCertificate.Sum - TotalOrdersForDate + TotalIndexationsForDate;
+
+                if (TotalRestForDate != 0)
+                {
+                    objIndexation.Sum = Math.Round(TotalRestForDate * indСoefficient, 2);
+                    objIndexation.Description = String.Format("{0} [Расчет: ({1:C}-{2:C}+{3:C})*{4}={5:C}]",
+                        indDescription,
+                        objCertificate.Sum,
+                        TotalOrdersForDate,
+                        TotalIndexationsForDate,
+                        indСoefficient,
+                        objIndexation.Sum);
+                    objIndexation.CertificateId = objCertificate.Id;
+                    
+                    await indexationService.CreateAsync(objIndexation);
+                    //objCertificate.Indexations.Add(objIndexation);
+                }
+            }
+            
+            _indexationList = await indexationService.GetAllAsync();
+            modalNew.Close();
+        }
+    }
+
+    public bool ValidModalNew()
+    {
+        textErrorModalNew = "";
+
+        if (indСoefficient == 0)
+        {
+            textErrorModalNew = "Коэффициент не должен быть равен 0!";
+        }
+
+        if (textErrorModalNew == "")
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+}

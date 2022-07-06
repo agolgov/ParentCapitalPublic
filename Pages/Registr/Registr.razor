@@ -1,0 +1,97 @@
+﻿@page "/registr"
+@attribute [Authorize(Roles = "Администраторы, Департамент")]
+@using ParentCapitalBlazor.Data
+@inject IGenderService genderService
+@inject IDestinationService destinationService
+@inject ICertificateService certificateService
+@inject IChildService childService
+@inject IOrderService orderService
+@inject IIndexationService indexationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<section class="content-container">
+    <h1>Регистр</h1>
+    <h3>выданных сертификатов на материнский (семейный) капитал НАО</h3>
+    <small class="text-muted">Дата формирования регистра: @this.strDateRegistr</small>
+    <br>
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th scope="col">Ном. серт.</th>
+                <th scope="col">Дата вкл. в регистр</th>
+                <th scope="col">Ф.И.О. (фамил. при рожд.)</th>
+                <th scope="col">Дата рожд.</th>
+                <th scope="col">Адрес места жит.</th>
+                <th scope="col">Паспорт</th>
+                <th scope="col">Сведения о детях</th>
+                <th scope="col" class="text-right">Размер капитала</th>
+                <th scope="col">Индексация</th>
+                <th scope="col">Направление средств</th>
+                <th scope="col" class="text-right">Остаток капитала</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in _certificateList)
+            {
+                <tr>
+                    <td scope="row">@item.Number</td>
+                    <td>@item.Date.ToShortDateString()</td>
+                    <td class="small">@item.Parent</td>
+                    <td>@item.DateOfBirth.ToShortDateString()</td>
+                    <td class="small">@item.Address</td>
+                    <td class="small">@item.Document</td>
+                    <td class="small">
+                        <ul>
+                            @foreach (var ch in item.Children)
+                            {
+                                <li>@ch.Name; @ch.DateOfBirth.ToShortDateString(); @ch.Document</li>
+                            }
+                        </ul>
+                    </td>
+                    <td class="text-right">@item.Sum.ToString("N2")</td>
+                    <td class="small">
+                        <ul>
+                            @foreach (var ind in item.Indexations)
+                            {
+                                <li>@ind.Date.ToShortDateString(); @ind.Sum.ToString("N2")</li>
+                            }
+                        </ul>
+                    </td>
+                    <td class="small">
+                        <ul>
+                            @foreach (var ord in item.Orders)
+                            {
+                                <li>@ord.Number; @ord.Date.ToShortDateString(); @ord.Sum.ToString("N2"); @ord.Destination.Name</li>
+                            }
+                        </ul>
+                    </td>
+                    <td class="text-right">
+                        @{
+                            decimal TotalOrders = item.Orders.Sum(o => o.Sum);
+                            decimal TotalIndexations = item.Indexations.Sum(i => i.Sum);
+                            decimal TotalSumIndexations = item.Sum + TotalIndexations;
+                            decimal TotalSumIndexationsOrders = TotalSumIndexations - TotalOrders;
+                        }
+                        @TotalSumIndexationsOrders.ToString("N2")
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</section>
+
+@code{
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    
+    private List<Certificate> _certificateList = new List<Certificate>();
+
+    public string strDateRegistr = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        strDateRegistr = DateTime.Now.ToLongDateString() + " " + DateTime.Now.ToLongTimeString();
+        _certificateList = await certificateService.GetRegistrAsync();
+        await base.OnInitializedAsync();
+    }
+}
